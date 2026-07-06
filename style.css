@@ -8,13 +8,13 @@
 }
 
 :root {
-  --sidebar-bg: #2a2826;
+  --sidebar-bg: #201e1c;
   --sidebar-text: #e8e4dc;
   --sidebar-muted: #9a948a;
   --sidebar-border: #3d3a36;
-  --app-bg: #1e1d1b;
-  --btn-primary: #c4704a;
-  --btn-primary-hover: #d4825c;
+  --app-bg: #171615;
+  --btn-primary: #3d6b5e;
+  --btn-primary-hover: #4d8272;
   --btn-secondary: #5a6b5c;
   --btn-secondary-hover: #6b7d6d;
 
@@ -91,7 +91,7 @@ body {
   gap: 0.75rem;
   padding: 0.75rem 1.25rem;
   border-bottom: 1px solid #3d3a36;
-  background: #252320;
+  background: #1c1a18;
   flex-shrink: 0;
 }
 
@@ -111,7 +111,7 @@ body {
 .mode-btn {
   padding: 0.4rem 0.85rem;
   border: 1.5px solid #3d3a36;
-  background: #1e1d1b;
+  background: #171615;
   color: #e8e4dc;
   font-family: system-ui, sans-serif;
   font-size: 0.82rem;
@@ -124,8 +124,8 @@ body {
 }
 
 .mode-btn.active {
-  border-color: #c4704a;
-  background: #2a2826;
+  border-color: var(--btn-primary);
+  background: #1c1a18;
   color: #f0ebe2;
 }
 
@@ -238,7 +238,7 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #c4704a, #8b7355);
+  background: linear-gradient(135deg, var(--btn-primary), var(--btn-primary-hover));
   flex-shrink: 0;
 }
 
@@ -318,7 +318,7 @@ body {
   width: 40px;
   height: 40px;
   border: 1.5px solid #3d3a36;
-  background: #252320;
+  background: #1c1a18;
   color: #e8e4dc;
   font-size: 1.5rem;
   line-height: 1;
@@ -331,7 +331,7 @@ body {
 }
 
 .mobile-nav-btn:hover {
-  border-color: #c4704a;
+  border-color: var(--btn-primary);
   color: #f0ebe2;
 }
 
@@ -365,7 +365,7 @@ body {
 #topic-input {
   width: 100%;
   padding: 0.6rem 0.75rem;
-  background: #1e1d1b;
+  background: #171615;
   border: 1px solid var(--sidebar-border);
   color: var(--sidebar-text);
   font-family: inherit;
@@ -381,7 +381,7 @@ body {
 .slide-textarea {
   width: 100%;
   padding: 0.6rem 0.75rem;
-  background: #1e1d1b;
+  background: #171615;
   border: 1px solid var(--sidebar-border);
   color: var(--sidebar-text);
   font-family: inherit;
@@ -433,8 +433,8 @@ body {
 
 .emphasis-hint code {
   font-family: inherit;
-  color: #d4a88a;
-  background: #1e1d1b;
+  color: #8ab5a8;
+  background: #171615;
   padding: 0.1em 0.35em;
   border-radius: 2px;
   font-size: 0.95em;
@@ -488,7 +488,7 @@ body {
 .count-btn {
   min-width: 36px;
   padding: 0.45rem 0.55rem;
-  background: #1e1d1b;
+  background: #171615;
   border: 1.5px solid var(--sidebar-border);
   color: var(--sidebar-text);
   font-family: inherit;
@@ -504,7 +504,7 @@ body {
 
 .count-btn.active {
   border-color: var(--btn-primary);
-  background: #252320;
+  background: #1c1a18;
   color: #f0ebe2;
 }
 
@@ -517,7 +517,7 @@ body {
 .structure-card {
   text-align: left;
   padding: 0.75rem;
-  background: #1e1d1b;
+  background: #171615;
   border: 1.5px solid var(--sidebar-border);
   border-radius: 2px;
   cursor: pointer;
@@ -532,7 +532,7 @@ body {
 
 .structure-card.selected {
   border-color: var(--btn-primary);
-  background: #252320;
+  background: #1c1a18;
 }
 
 .structure-card-name {
@@ -639,7 +639,7 @@ body {
 
 .font-btn {
   padding: 0.5rem 0.65rem;
-  background: #1e1d1b;
+  background: #171615;
   border: 1.5px solid var(--sidebar-border);
   color: var(--sidebar-text);
   font-size: 0.95rem;
@@ -652,7 +652,7 @@ body {
 
 .font-btn.active {
   border-color: var(--btn-primary);
-  background: #252320;
+  background: #1c1a18;
 }
 
 .export-all {
