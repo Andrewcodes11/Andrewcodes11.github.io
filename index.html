@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carousel Builder</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <h1>Carousel Builder</h1>
+        <p class="sidebar-tagline">Type your copy. Hit Generate. Get a random design.</p>
+      </header>
+
+      <section class="control-group">
+        <label for="topic-input">What's this carousel about?</label>
+        <input type="text" id="topic-input" placeholder="e.g. morning routines, freelance pricing…">
+      </section>
+
+      <section class="control-group">
+        <h2>Pick a structure</h2>
+        <div id="structure-picker" class="structure-picker"></div>
+      </section>
+
+      <section class="control-group slide-inputs-group">
+        <h2>Your slides</h2>
+        <p class="emphasis-hint">Wrap words in <code>*asterisks*</code> to make them pop on the slide.</p>
+        <div id="slide-inputs" class="slide-inputs"></div>
+      </section>
+
+      <div class="generate-block">
+        <button type="button" id="generate-btn" class="btn btn-primary" disabled>Generate</button>
+        <p id="generate-hint" class="generate-hint">fill in all 5 slides</p>
+      </div>
+
+      <section class="control-group post-generate" id="post-generate" hidden>
+        <button type="button" id="shuffle-btn" class="btn btn-shuffle">🎲 Shuffle Design</button>
+
+        <div class="fine-tune" id="fine-tune">
+          <h2>Fine-tune</h2>
+
+          <div class="theme-picker">
+            <span class="control-label">Color palette</span>
+            <div class="theme-swatches" id="theme-swatches">
+              <button type="button" class="theme-swatch" data-theme="cream" title="Warm cream & terracotta" aria-label="Warm cream and terracotta"></button>
+              <button type="button" class="theme-swatch" data-theme="sage" title="Muted sage" aria-label="Muted sage"></button>
+              <button type="button" class="theme-swatch" data-theme="dusty" title="Dusty pink" aria-label="Dusty pink"></button>
+              <button type="button" class="theme-swatch" data-theme="oat" title="Oatmeal & brown" aria-label="Oatmeal and brown"></button>
+            </div>
+          </div>
+
+          <div class="font-picker">
+            <span class="control-label">Font pairing</span>
+            <div class="font-toggle" id="font-toggle">
+              <button type="button" class="font-btn" data-fonts="pairing-a">Edmunds</button>
+              <button type="button" class="font-btn" data-fonts="pairing-b">Edmunds Distressed</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="export-all" id="export-all" hidden>
+        <button type="button" id="download-zip-btn" class="btn btn-secondary">Download all as ZIP</button>
+        <p class="export-hint">Exports 5 PNGs at 1080×1350 — editor UI stripped.</p>
+      </section>
+    </aside>
+
+    <main class="preview-area mode-desktop" id="preview-area">
+      <div id="preview-toolbar" class="preview-toolbar" hidden>
+        <span class="preview-toolbar-label">Preview as</span>
+        <div class="preview-mode-toggle">
+          <button type="button" class="mode-btn active" data-mode="desktop" id="mode-desktop">Desktop</button>
+          <button type="button" class="mode-btn" data-mode="mobile" id="mode-mobile">Mobile</button>
+        </div>
+      </div>
+
+      <div id="preview-empty" class="preview-empty">
+        <p>Write your 5 slides in the sidebar, then hit <strong>Generate</strong>.</p>
+      </div>
+
+      <div id="preview-canvas" class="preview-canvas" hidden>
+        <div class="phone-device">
+          <div class="phone-bezel">
+            <div class="phone-notch" aria-hidden="true"></div>
+            <div class="phone-screen">
+              <div class="ig-feed-chrome mobile-only">
+                <div class="ig-status-bar">
+                  <span>9:41</span>
+                  <span class="ig-status-icons">▮▮▮</span>
+                </div>
+                <div class="ig-post-header">
+                  <span class="ig-avatar" aria-hidden="true"></span>
+                  <span class="ig-username">your_carousel</span>
+                </div>
+              </div>
+              <div id="slides-row" class="slides-row"></div>
+              <div id="mobile-dots" class="carousel-dots mobile-only" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+        <div class="mobile-controls mobile-only editor-only">
+          <button type="button" id="mobile-prev" class="mobile-nav-btn" aria-label="Previous slide">‹</button>
+          <span id="mobile-counter" class="mobile-counter">1 / 5</span>
+          <button type="button" id="mobile-next" class="mobile-nav-btn" aria-label="Next slide">›</button>
+        </div>
+        <p class="mobile-preview-hint mobile-only editor-only">Swipe inside the phone or use arrows — 4:5 feed crop</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Hand-drawn accent SVGs (reused via clone) -->
+  <template id="doodle-circle">
+    <svg class="doodle doodle-circle" viewBox="0 0 120 80" aria-hidden="true">
+      <path d="M12,42 Q8,18 35,12 Q68,6 95,22 Q112,38 98,58 Q78,74 48,68 Q22,62 12,42" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+  </template>
+  <template id="doodle-underline">
+    <svg class="doodle doodle-underline" viewBox="0 0 200 24" aria-hidden="true">
+      <path d="M4,16 Q50,22 100,14 Q150,8 196,18" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+    </svg>
+  </template>
+  <template id="doodle-arrow">
+    <svg class="doodle doodle-arrow" viewBox="0 0 60 50" aria-hidden="true">
+      <path d="M6,28 Q28,12 48,8 M48,8 L38,4 M48,8 L44,20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </template>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="templates.js"></script>
+  <script src="layouts.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
