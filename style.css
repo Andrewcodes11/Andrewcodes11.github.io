@@ -1,19 +1,4 @@
-/* ===== Edmunds (self-hosted — not on Google Fonts) ===== */
-@font-face {
-  font-family: 'Edmunds';
-  src: url('fonts/edmunds.otf') format('opentype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Edmunds Distressed';
-  src: url('fonts/edmunds_distressed.otf') format('opentype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
+/* Edmunds fonts are loaded from fonts.css (base64, no fonts/ folder needed) */
 
 /* ===== Reset & base ===== */
 *, *::before, *::after {
