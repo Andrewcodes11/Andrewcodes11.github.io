@@ -13,6 +13,10 @@
   const DOODLE_TYPE_LIST = ['circle', 'underline', 'arrow'];
   const DOODLE_VARIANTS = { circle: ['a', 'b', 'c'], underline: ['a', 'b', 'c'], arrow: ['a', 'b', 'c'] };
   const FONT_SIZE_OPTIONS = ['small', 'medium', 'big'];
+  const CHAR_LIMIT_TITLE = 80;
+  const CHAR_LIMIT_MIDDLE = 180;
+  const CHAR_LIMIT_CONCLUSION = 150;
+  const CHAR_WARN_RATIO = 0.9;
 
   const state = {
     topic: '',
@@ -25,6 +29,7 @@
     layouts: [],
     layoutMeta: [],
     fontSizes: [],
+    fontSizeManual: [],
     slideCount: DEFAULT_SLIDE_COUNT,
     previewMode: 'desktop',
     mobileSlideIndex: 0,
@@ -130,6 +135,29 @@
     return CAROUSEL_STRUCTURES.find((s) => s.id === state.structureId);
   }
 
+  function getCharLimitForRole(role) {
+    if (role === 'Title') return CHAR_LIMIT_TITLE;
+    if (role === 'Conclusion') return CHAR_LIMIT_CONCLUSION;
+    return CHAR_LIMIT_MIDDLE;
+  }
+
+  function updateCharCounter(textarea) {
+    const field = textarea.closest('.slide-input-field');
+    const counter = field?.querySelector('.char-counter');
+    if (!counter) return;
+    const limit = parseInt(textarea.getAttribute('maxlength'), 10);
+    const len = textarea.value.length;
+    const countEl = counter.querySelector('.char-count');
+    if (countEl) countEl.textContent = String(len);
+    counter.classList.toggle('char-counter-warn', len >= Math.floor(limit * CHAR_WARN_RATIO));
+    counter.classList.toggle('char-counter-limit', len >= limit);
+  }
+
+  function onTextareaInput(e) {
+    updateCharCounter(e.target);
+    updateGenerateButton();
+  }
+
   function getTextareaValues() {
     return Array.from(slideInputs.querySelectorAll('.slide-textarea')).map((ta) => ta.value);
   }
@@ -141,22 +169,30 @@
     const saved = getTextareaValues();
     const slideDefs = getSlidesForCount(structure, state.slideCount);
 
-    slideInputs.innerHTML = slideDefs.map((slide, i) => `
+    slideInputs.innerHTML = slideDefs.map((slide, i) => {
+      const limit = getCharLimitForRole(slide.role);
+      const len = (saved[i] || '').length;
+      const warnAt = Math.floor(limit * CHAR_WARN_RATIO);
+      const counterClass = len >= limit ? 'char-counter char-counter-limit' : len >= warnAt ? 'char-counter char-counter-warn' : 'char-counter';
+      return `
       <div class="slide-input-field">
         <label for="slide-input-${i}">${escapeHtml(slide.role)}</label>
         <textarea
           id="slide-input-${i}"
           class="slide-textarea"
           rows="3"
+          maxlength="${limit}"
           placeholder="${escapeHtml(slide.placeholder)}"
           data-index="${i}"
-        >${saved[i] || ''}</textarea>
+        >${escapeHtml(saved[i] || '')}</textarea>
+        <p class="${counterClass}"><span class="char-count">${len}</span> / ${limit}</p>
         <p class="slide-input-hint">${escapeHtml(slide.helperText)}</p>
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     slideInputs.querySelectorAll('.slide-textarea').forEach((ta) => {
-      ta.addEventListener('input', updateGenerateButton);
+      ta.addEventListener('input', onTextareaInput);
     });
 
     updateGenerateButton();
@@ -422,6 +458,14 @@
     slidesRow.addEventListener('scroll', () => {
       if (state.previewMode === 'mobile') syncMobileCarouselUI();
     }, { passive: true });
+
+    slidesRow.addEventListener('click', (e) => {
+      const btn = e.target.closest('.size-btn-corner');
+      if (!btn) return;
+      e.stopPropagation();
+      e.preventDefault();
+      setSlideFontSize(parseInt(btn.dataset.index, 10), btn.dataset.size, { manual: true });
+    });
   }
 
   function setPreviewMode(mode) {
@@ -503,6 +547,7 @@
     state.topic = topicInput.value.trim();
     readSlidesFromTextareas();
     state.fontSizes = Array(state.slides.length).fill('medium');
+    state.fontSizeManual = Array(state.slides.length).fill(false);
     randomizeDesign();
 
     state.generated = true;
@@ -728,7 +773,7 @@
     `;
   }
 
-  function setSlideFontSize(index, size) {
+  function applyFontSizeClass(index, size) {
     if (!FONT_SIZE_OPTIONS.includes(size)) return;
     state.fontSizes[index] = size;
 
@@ -741,6 +786,45 @@
     const column = slidesRow.querySelector(`.slide-column[data-index="${index}"]`);
     column?.querySelectorAll('.size-btn-corner').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.size === size);
+    });
+  }
+
+  function setSlideFontSize(index, size, { manual = false } = {}) {
+    if (!FONT_SIZE_OPTIONS.includes(size)) return;
+    if (manual) state.fontSizeManual[index] = true;
+    applyFontSizeClass(index, size);
+  }
+
+  function slideContentOverflows(index) {
+    const slideEl = getSlideElement(index);
+    if (!slideEl) return false;
+
+    const candidates = [
+      slideEl.querySelector('.layout-body'),
+      slideEl.querySelector('.slide-inner'),
+    ].filter(Boolean);
+
+    return candidates.some((el) => el.scrollHeight > el.clientHeight + 4);
+  }
+
+  function autoFitSlideFontSize(index) {
+    const layout = LAYOUT_TEMPLATES[state.layouts[index]];
+    if (layout?.allowsOverflow) return;
+    if (state.fontSizeManual[index] && !slideContentOverflows(index)) return;
+
+    let safety = FONT_SIZE_OPTIONS.length;
+    while (safety-- > 0) {
+      if (!slideContentOverflows(index)) break;
+      const current = getSlideFontSize(index);
+      const sizeIdx = FONT_SIZE_OPTIONS.indexOf(current);
+      if (sizeIdx <= 0) break;
+      applyFontSizeClass(index, FONT_SIZE_OPTIONS[sizeIdx - 1]);
+    }
+  }
+
+  function runAutoFitAllSlides() {
+    requestAnimationFrame(() => {
+      state.slides.forEach((_, i) => autoFitSlideFontSize(i));
     });
   }
 
@@ -764,9 +848,9 @@
       return `
         <div class="slide-column" data-index="${i}">
           <span class="slide-number editor-only">${i + 1}/${total} · ${escapeHtml(layoutId)}</span>
-          <div class="slide-scaler">
+          <div class="slide-scaler theme-${state.theme}">
+            ${renderSizePicker(i)}
             <div class="${getSlideClassList(i)}" data-slide-index="${i}" data-layout="${layoutId}" style="--block-rotate:${rot}deg">
-              ${renderSizePicker(i)}
               <div class="slide-inner">
                 ${!usesOwnLabel(layoutId) ? `<span class="role-tag">${escapeHtml(slide.role)}</span>` : ''}
                 ${renderSlideContent(slide, layoutId, i, meta)}
@@ -821,13 +905,6 @@
       });
     });
 
-    slidesRow.querySelectorAll('.size-btn-corner').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        setSlideFontSize(parseInt(btn.dataset.index, 10), btn.dataset.size);
-      });
-    });
-
     slidesRow.querySelectorAll('.download-slide-btn').forEach((btn) => {
       btn.addEventListener('click', () => downloadSlide(parseInt(btn.dataset.index, 10)));
     });
@@ -836,6 +913,8 @@
       renderMobileDots();
       requestAnimationFrame(() => scrollToMobileSlide(state.mobileSlideIndex, false));
     }
+
+    runAutoFitAllSlides();
   }
 
   function onSlideFocus(e) {
@@ -893,6 +972,8 @@
         attachDoodleForSlide(idx);
       }
     }
+
+    requestAnimationFrame(() => autoFitSlideFontSize(idx));
   }
 
   function attachDoodleForSlide(i) {
@@ -923,11 +1004,18 @@
   }
 
   function applyThemeToSlides() {
-    slidesRow.querySelectorAll('.slide').forEach((slide) => {
-      const idx = slide.dataset.slideIndex;
+    slidesRow.querySelectorAll('.slide-column').forEach((column) => {
+      const idx = column.dataset.index;
+      const slide = column.querySelector('.slide');
+      const scaler = column.querySelector('.slide-scaler');
       const rot = state.rotations[idx];
-      slide.className = getSlideClassList(idx);
-      slide.style.setProperty('--block-rotate', `${rot}deg`);
+      if (slide) {
+        slide.className = getSlideClassList(idx);
+        slide.style.setProperty('--block-rotate', `${rot}deg`);
+      }
+      if (scaler) {
+        scaler.className = `slide-scaler theme-${state.theme}`;
+      }
     });
   }
 
