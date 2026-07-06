@@ -4,6 +4,9 @@
   const SLIDE_W = 1080;
   const SLIDE_H = 1350;
   const MOBILE_SCREEN_W = 366;
+  const MIN_SLIDE_COUNT = 3;
+  const MAX_SLIDE_COUNT = 10;
+  const DEFAULT_SLIDE_COUNT = 5;
 
   const THEMES = ['cream', 'sage', 'dusty', 'oat'];
   const FONT_PAIRINGS = ['pairing-a', 'pairing-b'];
@@ -22,6 +25,7 @@
     layouts: [],
     layoutMeta: [],
     fontSizes: [],
+    slideCount: DEFAULT_SLIDE_COUNT,
     previewMode: 'desktop',
     mobileSlideIndex: 0,
     generated: false
@@ -32,6 +36,7 @@
 
   const topicInput = $('#topic-input');
   const structurePicker = $('#structure-picker');
+  const slideCountPicker = $('#slide-count-picker');
   const slideInputs = $('#slide-inputs');
   const generateBtn = $('#generate-btn');
   const generateHint = $('#generate-hint');
@@ -48,12 +53,66 @@
   const postGenerate = $('#post-generate');
   const exportAll = $('#export-all');
   const downloadZipBtn = $('#download-zip-btn');
+  const exportHint = $('#export-hint');
+
+  function getSlideCount() {
+    return state.slideCount;
+  }
+
+  function getSlidesForCount(structure, count) {
+    if (!structure || count < 2) return [];
+    const title = structure.slides[0];
+    const conclusion = structure.slides[structure.slides.length - 1];
+    const middleTemplates = structure.slides.slice(1, -1);
+    const slides = [];
+
+    for (let i = 0; i < count; i++) {
+      if (i === 0) {
+        slides.push({ role: 'Title', placeholder: title.placeholder, helperText: title.helperText });
+      } else if (i === count - 1) {
+        slides.push({ role: 'Conclusion', placeholder: conclusion.placeholder, helperText: conclusion.helperText });
+      } else {
+        const tmpl = middleTemplates[(i - 1) % middleTemplates.length];
+        slides.push({
+          role: `Slide ${i + 1}`,
+          placeholder: tmpl.placeholder,
+          helperText: tmpl.helperText
+        });
+      }
+    }
+    return slides;
+  }
+
+  function updateDynamicCopy() {
+    const n = getSlideCount();
+    if (generateHint && !generateHint.hidden) {
+      generateHint.textContent = `fill in all ${n} slides`;
+    }
+    if (exportHint) {
+      exportHint.textContent = `Exports ${n} PNGs at 1080×1350 — editor UI stripped.`;
+    }
+  }
+
+  function renderSlideCountPicker() {
+    slideCountPicker.innerHTML = '';
+    for (let n = MIN_SLIDE_COUNT; n <= MAX_SLIDE_COUNT; n++) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `count-btn${n === state.slideCount ? ' active' : ''}`;
+      btn.dataset.count = String(n);
+      btn.textContent = String(n);
+      btn.title = `${n} slides`;
+      slideCountPicker.appendChild(btn);
+    }
+  }
 
   function init() {
     renderStructurePicker();
+    renderSlideCountPicker();
     renderSlideInputs();
     bindEvents();
     updateGenerateButton();
+    updateDynamicCopy();
     updatePreviewScale();
     window.addEventListener('resize', updatePreviewScale);
   }
@@ -80,8 +139,9 @@
     if (!structure) return;
 
     const saved = getTextareaValues();
+    const slideDefs = getSlidesForCount(structure, state.slideCount);
 
-    slideInputs.innerHTML = structure.slides.map((slide, i) => `
+    slideInputs.innerHTML = slideDefs.map((slide, i) => `
       <div class="slide-input-field">
         <label for="slide-input-${i}">${escapeHtml(slide.role)}</label>
         <textarea
@@ -100,11 +160,12 @@
     });
 
     updateGenerateButton();
+    updateDynamicCopy();
   }
 
   function allSlidesFilled() {
     const textareas = slideInputs.querySelectorAll('.slide-textarea');
-    if (textareas.length !== 5) return false;
+    if (textareas.length !== getSlideCount()) return false;
     return Array.from(textareas).every((ta) => ta.value.trim().length > 0);
   }
 
@@ -112,6 +173,7 @@
     const ready = allSlidesFilled();
     generateBtn.disabled = !ready;
     generateHint.hidden = ready;
+    if (!ready) updateDynamicCopy();
   }
 
   function randomItem(arr) {
@@ -192,7 +254,63 @@
     };
   }
 
-  function generateLayoutMeta(layoutId, text) {
+  function pickQuoteMeta() {
+    return {
+      markSide: randomItem(['left', 'right']),
+      align: randomItem(['left', 'center', 'right'])
+    };
+  }
+
+  function extractStatFromText(text) {
+    const plain = stripMarkup(text);
+    const numMatch = plain.match(/\b(\d[\d,.%kKmMbBxX]*)\b/);
+    if (numMatch) {
+      const stat = numMatch[1];
+      const supporting = plain.replace(numMatch[0], '').replace(/^[\s—–-]+/, '').trim();
+      return { stat, supporting: supporting || plain };
+    }
+    const words = plain.split(/\s+/).filter(Boolean);
+    return { stat: words[0] || '100%', supporting: words.slice(1).join(' ') || plain };
+  }
+
+  function pickLetterboxMeta() {
+    return { barSize: 100 + Math.floor(Math.random() * 80) };
+  }
+
+  function parseChecklistLines(text) {
+    const lines = text.split(/\n+/).map((l) =>
+      l.replace(/^[①②③④⑤⑥⑦⑧⑨⑩\d]+[\.\):\-]\s*/, '').trim()
+    ).filter(Boolean);
+    if (lines.length >= 2) return lines;
+    const parts = stripMarkup(text).split(/[,;•·]|\s+—\s+/).map((s) => s.trim()).filter(Boolean);
+    return parts.length >= 2 ? parts : [text];
+  }
+
+  function pickChecklistMeta(text) {
+    return {
+      markerStyle: randomItem(['checkbox', 'number']),
+      items: parseChecklistLines(text)
+    };
+  }
+
+  function pickMastheadMeta(slide) {
+    const kickers = ['The edit', 'Field notes', 'Inside', 'Spotlight', 'Brief', 'Dispatch'];
+    return {
+      eyebrow: randomItem(kickers),
+      ruleRotate: (Math.random() * 4 - 2).toFixed(1)
+    };
+  }
+
+  const RESTRUCTURE_ON_BLUR = [
+    'stacked-statement', 'scrapbook-collage', 'swiss-grid', 'poster-huge',
+    'big-stat-callout', 'checklist-flashcard', 'quote-card', 'magazine-masthead'
+  ];
+
+  function usesOwnLabel(layoutId) {
+    return LAYOUTS_WITH_OWN_LABEL.includes(layoutId);
+  }
+
+  function generateLayoutMeta(layoutId, text, slide) {
     switch (layoutId) {
       case 'poster-huge':
         return {
@@ -207,22 +325,33 @@
         return pickSwissMeta(text);
       case 'stacked-statement':
         return { chunks: pickChunkMeta(splitTextIntoChunks(text)) };
+      case 'quote-card':
+        return pickQuoteMeta();
+      case 'big-stat-callout':
+        return extractStatFromText(text);
+      case 'cinematic-letterbox':
+        return pickLetterboxMeta();
+      case 'checklist-flashcard':
+        return pickChecklistMeta(text);
+      case 'magazine-masthead':
+        return pickMastheadMeta(slide);
       default:
         return {};
     }
   }
 
   function randomizeDesign() {
+    const count = state.slides.length || getSlideCount();
     state.theme = randomItem(THEMES);
     state.fonts = randomItem(FONT_PAIRINGS);
-    state.rotations = Array.from({ length: 5 }, () => randomRotation());
-    state.doodles = Array.from({ length: 5 }, () => {
+    state.rotations = Array.from({ length: count }, () => randomRotation());
+    state.doodles = Array.from({ length: count }, () => {
       const type = randomItem(DOODLE_TYPE_LIST);
       return { type, variant: randomItem(DOODLE_VARIANTS[type]) };
     });
-    state.layouts = Array.from({ length: 5 }, () => randomItem(LAYOUT_TEMPLATE_IDS));
+    state.layouts = Array.from({ length: count }, () => randomItem(LAYOUT_TEMPLATE_IDS));
     state.layoutMeta = state.layouts.map((layoutId, i) =>
-      generateLayoutMeta(layoutId, state.slides[i]?.text || '')
+      generateLayoutMeta(layoutId, state.slides[i]?.text || '', state.slides[i])
     );
     syncFineTuneUI();
   }
@@ -242,6 +371,19 @@
       state.structureId = card.dataset.id;
       $$('.structure-card').forEach((c) => c.classList.toggle('selected', c.dataset.id === state.structureId));
       renderSlideInputs();
+    });
+
+    slideCountPicker.addEventListener('click', (e) => {
+      const btn = e.target.closest('.count-btn');
+      if (!btn) return;
+      const count = parseInt(btn.dataset.count, 10);
+      if (count < MIN_SLIDE_COUNT || count > MAX_SLIDE_COUNT) return;
+      state.slideCount = count;
+      $$('.count-btn').forEach((b) => b.classList.toggle('active', parseInt(b.dataset.count, 10) === count));
+      renderSlideInputs();
+      if (state.generated && state.mobileSlideIndex >= count) {
+        state.mobileSlideIndex = 0;
+      }
     });
 
     generateBtn.addEventListener('click', generate);
@@ -346,9 +488,10 @@
     if (!structure) return;
 
     const values = getTextareaValues();
-    state.slides = structure.slides.map((slide, i) => ({
+    const slideDefs = getSlidesForCount(structure, state.slideCount);
+    state.slides = slideDefs.map((slide, i) => ({
       role: slide.role,
-      text: values[i].trim(),
+      text: (values[i] || '').trim(),
       helperText: slide.helperText,
       index: i
     }));
@@ -359,16 +502,18 @@
 
     state.topic = topicInput.value.trim();
     readSlidesFromTextareas();
-    state.fontSizes = Array(5).fill('medium');
+    state.fontSizes = Array(state.slides.length).fill('medium');
     randomizeDesign();
 
     state.generated = true;
+    state.mobileSlideIndex = 0;
     renderSlides();
     previewEmpty.hidden = true;
     previewCanvas.hidden = false;
     previewToolbar.hidden = false;
     postGenerate.hidden = false;
     exportAll.hidden = false;
+    updateDynamicCopy();
     renderMobileDots();
     updatePreviewScale();
   }
@@ -439,6 +584,25 @@
     `;
   }
 
+  function renderChecklistDisplay(text, meta) {
+    const items = meta.items || parseChecklistLines(text);
+    const marker = meta.markerStyle || 'checkbox';
+    return items.map((item, i) => `
+      <div class="checklist-item">
+        <span class="checklist-marker checklist-${marker}">${marker === 'number' ? `${i + 1}.` : '☐'}</span>
+        <span class="checklist-text">${parseSlideText(item)}</span>
+      </div>
+    `).join('');
+  }
+
+  function renderBigStatDisplay(text, meta) {
+    const { stat, supporting } = meta.stat ? meta : extractStatFromText(text);
+    return `
+      <div class="big-stat-value">${parseSlideText(stat)}</div>
+      <div class="big-stat-support">${parseSlideText(supporting)}</div>
+    `;
+  }
+
   function renderSlideContent(slide, layoutId, index, meta) {
     const parsed = parseSlideText(slide.text);
     const editableAttrs = `contenteditable="true" spellcheck="true" data-index="${index}" data-layout="${layoutId}"`;
@@ -489,6 +653,55 @@
           </div>
         `;
 
+      case 'quote-card':
+        return `
+          <div class="layout-body layout-quote-card align-${meta.align} mark-${meta.markSide}">
+            <span class="quote-mark" aria-hidden="true">"</span>
+            <div class="slide-content quote-source" ${editableAttrs}>${parsed}</div>
+          </div>
+        `;
+
+      case 'big-stat-callout':
+        return `
+          <div class="layout-body layout-big-stat-callout">
+            <div class="big-stat-display" aria-hidden="true">${renderBigStatDisplay(slide.text, meta)}</div>
+            <div class="slide-content big-stat-source" ${editableAttrs} tabindex="0">${parsed}</div>
+          </div>
+        `;
+
+      case 'cinematic-letterbox':
+        return `
+          <div class="layout-body layout-cinematic-letterbox" style="--bar-size:${meta.barSize}px">
+            <div class="letterbox-bar letterbox-top"></div>
+            <div class="letterbox-band">
+              <div class="slide-content" ${editableAttrs}>${parsed}</div>
+            </div>
+            <div class="letterbox-bar letterbox-bottom"></div>
+          </div>
+        `;
+
+      case 'checklist-flashcard':
+        return `
+          <div class="layout-body layout-checklist-flashcard">
+            <div class="checklist-card">
+              <div class="slide-content checklist-source" ${editableAttrs}>
+                ${renderChecklistDisplay(slide.text, meta)}
+              </div>
+            </div>
+          </div>
+        `;
+
+      case 'magazine-masthead':
+        return `
+          <div class="layout-body layout-magazine-masthead">
+            <div class="masthead-eyebrow">${escapeHtml(meta.eyebrow || 'The edit')}</div>
+            <div class="masthead-rule" style="--rule-rotate:${meta.ruleRotate}deg"></div>
+            <div class="masthead-headline">
+              <div class="slide-content" ${editableAttrs}>${parsed}</div>
+            </div>
+          </div>
+        `;
+
       default:
         return `
           <div class="layout-body layout-default">
@@ -507,13 +720,10 @@
   function renderSizePicker(i) {
     const current = getSlideFontSize(i);
     return `
-      <div class="slide-size-picker editor-only" data-index="${i}">
-        <span class="size-picker-label">Text size</span>
-        <div class="size-toggle">
-          ${FONT_SIZE_OPTIONS.map((size) => `
-            <button type="button" class="size-btn${current === size ? ' active' : ''}" data-size="${size}" data-index="${i}" title="${size}">${size === 'small' ? 'S' : size === 'medium' ? 'M' : 'B'}</button>
-          `).join('')}
-        </div>
+      <div class="slide-size-corner editor-only" data-index="${i}">
+        ${FONT_SIZE_OPTIONS.map((size) => `
+          <button type="button" class="size-btn-corner${current === size ? ' active' : ''}" data-size="${size}" data-index="${i}" title="${size}">${size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}</button>
+        `).join('')}
       </div>
     `;
   }
@@ -529,7 +739,7 @@
     }
 
     const column = slidesRow.querySelector(`.slide-column[data-index="${index}"]`);
-    column?.querySelectorAll('.size-btn').forEach((btn) => {
+    column?.querySelectorAll('.size-btn-corner').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.size === size);
     });
   }
@@ -549,20 +759,21 @@
       const rot = state.rotations[i] || 0;
       const layoutId = state.layouts[i];
       const meta = state.layoutMeta[i] || {};
+      const total = state.slides.length;
 
       return `
         <div class="slide-column" data-index="${i}">
-          <span class="slide-number editor-only">${i + 1}/5 · ${escapeHtml(layoutId)}</span>
+          <span class="slide-number editor-only">${i + 1}/${total} · ${escapeHtml(layoutId)}</span>
           <div class="slide-scaler">
             <div class="${getSlideClassList(i)}" data-slide-index="${i}" data-layout="${layoutId}" style="--block-rotate:${rot}deg">
+              ${renderSizePicker(i)}
               <div class="slide-inner">
-                ${layoutId !== 'swiss-grid' ? `<span class="role-tag">${escapeHtml(slide.role)}</span>` : ''}
+                ${!usesOwnLabel(layoutId) ? `<span class="role-tag">${escapeHtml(slide.role)}</span>` : ''}
                 ${renderSlideContent(slide, layoutId, i, meta)}
               </div>
             </div>
           </div>
           <p class="helper-text editor-only">${escapeHtml(slide.helperText)}</p>
-          ${renderSizePicker(i)}
           <button type="button" class="btn btn-sm btn-secondary editor-only download-slide-btn" data-index="${i}">Download slide</button>
         </div>
       `;
@@ -603,8 +814,18 @@
       });
     });
 
-    slidesRow.querySelectorAll('.size-btn').forEach((btn) => {
-      btn.addEventListener('click', () => setSlideFontSize(parseInt(btn.dataset.index, 10), btn.dataset.size));
+    slidesRow.querySelectorAll('.layout-big-stat-callout').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.big-stat-source')) return;
+        el.querySelector('.big-stat-source')?.focus();
+      });
+    });
+
+    slidesRow.querySelectorAll('.size-btn-corner').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setSlideFontSize(parseInt(btn.dataset.index, 10), btn.dataset.size);
+      });
     });
 
     slidesRow.querySelectorAll('.download-slide-btn').forEach((btn) => {
@@ -620,9 +841,10 @@
   function onSlideFocus(e) {
     const el = e.target;
     const layoutId = el.dataset.layout;
-    if (layoutId === 'stacked-statement' || layoutId === 'scrapbook-collage') {
+    const idx = parseInt(el.dataset.index, 10);
+    if (layoutId === 'stacked-statement' || layoutId === 'scrapbook-collage' || layoutId === 'checklist-flashcard' || layoutId === 'big-stat-callout') {
       el.dataset.wasStructured = 'true';
-      el.innerHTML = parseSlideText(state.slides[parseInt(el.dataset.index, 10)].text);
+      el.innerHTML = parseSlideText(state.slides[idx].text);
       el.classList.add('editing-plain');
     }
   }
@@ -637,14 +859,14 @@
     state.slides[idx].text = getPlainTextFromContent(e.target);
 
     const layoutId = state.layouts[idx];
-    if (layoutId === 'stacked-statement' || layoutId === 'scrapbook-collage' || layoutId === 'swiss-grid' || layoutId === 'poster-huge') {
-      state.layoutMeta[idx] = generateLayoutMeta(layoutId, state.slides[idx].text);
+    if (RESTRUCTURE_ON_BLUR.includes(layoutId)) {
+      state.layoutMeta[idx] = generateLayoutMeta(layoutId, state.slides[idx].text, state.slides[idx]);
       const slide = state.slides[idx];
       const column = slidesRow.querySelector(`.slide-column[data-index="${idx}"]`);
       const inner = column?.querySelector('.slide-inner');
       if (inner) {
         inner.innerHTML = '';
-        if (layoutId !== 'swiss-grid') {
+        if (!usesOwnLabel(layoutId)) {
           inner.insertAdjacentHTML('afterbegin', `<span class="role-tag">${escapeHtml(slide.role)}</span>`);
         }
         inner.insertAdjacentHTML('beforeend', renderSlideContent(slide, layoutId, idx, state.layoutMeta[idx]));
@@ -659,6 +881,13 @@
           scrapbook.addEventListener('click', (e) => {
             if (e.target.closest('.scrapbook-source')) return;
             inner.querySelector('.scrapbook-source')?.focus();
+          });
+        }
+        const bigStat = inner.querySelector('.layout-big-stat-callout');
+        if (bigStat) {
+          bigStat.addEventListener('click', (e) => {
+            if (e.target.closest('.big-stat-source')) return;
+            inner.querySelector('.big-stat-source')?.focus();
           });
         }
         attachDoodleForSlide(idx);
@@ -749,6 +978,12 @@
           cloned.querySelectorAll('.editor-only').forEach((el) => el.remove());
           cloned.querySelectorAll('.scrapbook-source.editing-plain, .scrapbook-source').forEach((el) => {
             if (el.closest('.layout-scrapbook-collage')) el.style.display = 'none';
+          });
+          cloned.querySelectorAll('.big-stat-source').forEach((el) => {
+            if (el.closest('.layout-big-stat-callout')) el.style.display = 'none';
+          });
+          cloned.querySelectorAll('.checklist-source.editing-plain').forEach((el) => {
+            el.classList.remove('editing-plain');
           });
           cloned.querySelectorAll('.stacked-source.editing-plain').forEach((el) => {
             el.classList.remove('editing-plain');

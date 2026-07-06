@@ -25,6 +25,11 @@
         <div id="structure-picker" class="structure-picker"></div>
       </section>
 
+      <section class="control-group">
+        <h2>How many slides?</h2>
+        <div id="slide-count-picker" class="slide-count-picker" role="group" aria-label="Slide count"></div>
+      </section>
+
       <section class="control-group slide-inputs-group">
         <h2>Your slides</h2>
         <p class="emphasis-hint">Wrap words in <code>*asterisks*</code> to make them pop on the slide.</p>
@@ -33,7 +38,7 @@
 
       <div class="generate-block">
         <button type="button" id="generate-btn" class="btn btn-primary" disabled>Generate</button>
-        <p id="generate-hint" class="generate-hint">fill in all 5 slides</p>
+        <p id="generate-hint" class="generate-hint">fill in all slides</p>
       </div>
 
       <section class="control-group post-generate" id="post-generate" hidden>
@@ -64,7 +69,7 @@
 
       <section class="export-all" id="export-all" hidden>
         <button type="button" id="download-zip-btn" class="btn btn-secondary">Download all as ZIP</button>
-        <p class="export-hint">Exports 5 PNGs at 1080×1350 — editor UI stripped.</p>
+        <p class="export-hint" id="export-hint">Exports PNGs at 1080×1350 — editor UI stripped.</p>
       </section>
     </aside>
 
@@ -78,7 +83,7 @@
       </div>
 
       <div id="preview-empty" class="preview-empty">
-        <p>Write your 5 slides in the sidebar, then hit <strong>Generate</strong>.</p>
+        <p>Write your slides in the sidebar, then hit <strong>Generate</strong>.</p>
       </div>
 
       <div id="preview-canvas" class="preview-canvas" hidden>
@@ -103,7 +108,7 @@
         </div>
         <div class="mobile-controls mobile-only editor-only">
           <button type="button" id="mobile-prev" class="mobile-nav-btn" aria-label="Previous slide">‹</button>
-          <span id="mobile-counter" class="mobile-counter">1 / 5</span>
+          <span id="mobile-counter" class="mobile-counter">1 / 1</span>
           <button type="button" id="mobile-next" class="mobile-nav-btn" aria-label="Next slide">›</button>
         </div>
         <p class="mobile-preview-hint mobile-only editor-only">Swipe inside the phone or use arrows — 4:5 feed crop</p>
