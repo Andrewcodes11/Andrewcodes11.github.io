@@ -58,6 +58,9 @@
   const postGenerate = $('#post-generate');
   const exportAll = $('#export-all');
   const downloadZipBtn = $('#download-zip-btn');
+  const mobileTabbar = $('#mobile-tabbar');
+  const tabEdit = $('#tab-edit');
+  const tabPreview = $('#tab-preview');
   const exportHint = $('#export-hint');
 
   function getSlideCount() {
@@ -265,7 +268,7 @@
     const aligns = ['left', 'center', 'right'];
     return chunks.map((_, i) => ({
       size: i === 1 ? 'hero' : i === 0 ? 'sm' : randomItem(sizes),
-      align: randomItem(aligns),
+      align: randomItem(aligns), 
       rotate: (Math.random() * 4 - 2).toFixed(1)
     }));
   }
@@ -446,6 +449,12 @@
 
     downloadZipBtn.addEventListener('click', downloadAllAsZip);
 
+    mobileTabbar.addEventListener('click', (e) => {
+      const btn = e.target.closest('.mobile-tab');
+      if (!btn) return;
+      setMobilePanel(btn.dataset.panel);
+    });
+
     previewToolbar.addEventListener('click', (e) => {
       const btn = e.target.closest('.mode-btn');
       if (!btn) return;
@@ -541,6 +550,15 @@
     }));
   }
 
+  function setMobilePanel(panel) {
+    document.body.classList.toggle('mobile-show-preview', panel === 'preview');
+    tabEdit.classList.toggle('active', panel === 'edit');
+    tabPreview.classList.toggle('active', panel === 'preview');
+    tabEdit.setAttribute('aria-selected', panel === 'edit');
+    tabPreview.setAttribute('aria-selected', panel === 'preview');
+    if (panel === 'preview') updatePreviewScale();
+  }
+
   function generate() {
     if (!allSlidesFilled()) return;
 
@@ -561,6 +579,7 @@
     updateDynamicCopy();
     renderMobileDots();
     updatePreviewScale();
+    if (window.innerWidth <= 900) setMobilePanel('preview');
   }
 
   function shuffleDesign() {
@@ -1042,6 +1061,109 @@
     return slidesRow.querySelector(`.slide[data-slide-index="${index}"]`);
   }
 
+  const MODERN_COLOR_RE = /color\(|oklch\(|lab\(|lch\(|color-mix\(/i;
+
+  const CAPTURE_COLOR_PROPS = [
+    'color', 'backgroundColor', 'borderColor', 'borderTopColor', 'borderRightColor',
+    'borderBottomColor', 'borderLeftColor', 'outlineColor', 'textDecorationColor',
+    'columnRuleColor', 'caretColor', 'fill', 'stroke', 'floodColor', 'stopColor'
+  ];
+
+  const CAPTURE_SHADOW_PROPS = ['boxShadow', 'textShadow'];
+
+  function usesModernColor(value) {
+    return typeof value === 'string' && MODERN_COLOR_RE.test(value);
+  }
+
+  /** Resolve any color string to browser-computed rgb/rgba via a hidden probe element. */
+  function resolveColorToRgb(colorStr, doc, host, mode) {
+    if (!colorStr || colorStr === 'none' || colorStr === 'transparent') return colorStr;
+    const trimmed = colorStr.trim();
+    if (!usesModernColor(trimmed)) return trimmed;
+
+    const probe = doc.createElement('span');
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;opacity:0;';
+    if (mode === 'color') {
+      probe.style.color = trimmed;
+    } else {
+      probe.style.backgroundColor = trimmed;
+    }
+    host.appendChild(probe);
+    const cs = doc.defaultView.getComputedStyle(probe);
+    const resolved = mode === 'color' ? cs.color : cs.backgroundColor;
+    host.removeChild(probe);
+    return resolved && resolved !== 'rgba(0, 0, 0, 0)' ? resolved : trimmed;
+  }
+
+  /**
+   * Walk a slide subtree and inline rgb() values so html2canvas never sees
+   * color()/oklch()/color-mix() in stylesheets or custom properties.
+   */
+  function normalizeColorsForCapture(cloneRoot, sourceRoot, doc) {
+    const win = doc.defaultView;
+    if (!win || !cloneRoot || !sourceRoot) return;
+
+    const cloneNodes = [cloneRoot, ...cloneRoot.querySelectorAll('*')];
+    const sourceNodes = [sourceRoot, ...sourceRoot.querySelectorAll('*')];
+
+    cloneNodes.forEach((cloneEl, i) => {
+      const sourceEl = sourceNodes[i];
+      if (!sourceEl) return;
+
+      const computed = window.getComputedStyle(sourceEl);
+
+      // Inline custom properties that may contain modern color functions
+      for (let p = 0; p < computed.length; p++) {
+        const prop = computed[p];
+        if (!prop.startsWith('--')) continue;
+        const raw = computed.getPropertyValue(prop).trim();
+        if (usesModernColor(raw)) {
+          cloneEl.style.setProperty(
+            prop,
+            resolveColorToRgb(raw, doc, cloneRoot, 'background')
+          );
+        }
+      }
+
+      // Normalize explicit inline styles on the clone
+      if (cloneEl.style && cloneEl.style.length) {
+        for (let s = 0; s < cloneEl.style.length; s++) {
+          const prop = cloneEl.style[s];
+          const raw = cloneEl.style.getPropertyValue(prop);
+          if (!usesModernColor(raw)) continue;
+          const mode = /background/i.test(prop) ? 'background' : 'color';
+          cloneEl.style.setProperty(prop, resolveColorToRgb(raw, doc, cloneRoot, mode));
+        }
+      }
+
+      // Force computed rgb values for standard color properties
+      CAPTURE_COLOR_PROPS.forEach((prop) => {
+        const val = computed[prop];
+        if (val && val !== 'none') cloneEl.style[prop] = val;
+      });
+
+      CAPTURE_SHADOW_PROPS.forEach((prop) => {
+        const val = computed[prop];
+        if (val && val !== 'none') cloneEl.style[prop] = val;
+      });
+
+      const bgColor = computed.backgroundColor;
+      if (bgColor) cloneEl.style.backgroundColor = bgColor;
+
+      const bgImage = computed.backgroundImage;
+      if (bgImage && bgImage !== 'none') {
+        cloneEl.style.backgroundImage = usesModernColor(bgImage) ? 'none' : bgImage;
+      }
+
+      if (usesModernColor(computed.background)) {
+        cloneEl.style.background = [bgImage && bgImage !== 'none' && !usesModernColor(bgImage) ? bgImage : null, bgColor]
+          .filter(Boolean)
+          .join(' ') || bgColor;
+      }
+    });
+  }
+
   async function captureSlide(slideEl) {
     document.body.classList.add('exporting');
 
@@ -1058,6 +1180,7 @@
       onclone: (doc) => {
         const cloned = doc.querySelector(`[data-slide-index="${slideEl.dataset.slideIndex}"]`);
         if (cloned) {
+          normalizeColorsForCapture(cloned, slideEl, doc);
           cloned.style.transform = 'none';
           const block = cloned.querySelector('.slide-content-block');
           if (block) {
